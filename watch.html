@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ControlFreak Run – hämta bana</title>
+<style>
+  :root { --purple:#A6248F; --orange:#F07F2A; --ink:#2c2c2a; --bg:#f6f1e7; --card:#fff; --muted:#6b6862; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:520px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:24px; margin:4px 0 2px; } h1 .f{color:var(--purple)} h1 .r{color:var(--orange)}
+  p { margin:8px 0; }
+  .card { background:var(--card); border-radius:14px; padding:16px; margin:14px 0; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  button, label.btn { display:block; width:100%; border:0; border-radius:10px; padding:14px; margin:8px 0; font:inherit; font-weight:600; text-align:center; cursor:pointer; background:var(--purple); color:#fff; }
+  button.secondary, label.btn.secondary { background:#efe6ee; color:var(--purple); }
+  button:disabled { opacity:.45; }
+  input[type=text] { width:100%; padding:12px; font:inherit; border:1px solid #d8d2c8; border-radius:10px; }
+  video { width:100%; border-radius:10px; background:#000; display:none; margin-top:8px; }
+  #found { display:none; } #found .name { font-size:22px; font-weight:700; }
+  .err { color:#b3261e; } .muted { color:var(--muted); font-size:14px; }
+  details { margin-top:18px; } pre { white-space:pre-wrap; font-size:12px; background:#fff; padding:10px; border-radius:8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Control<span class="f">Freak</span> <span class="r">Run</span></h1>
+  <p id="intro">Hämta en bana till klockan: skanna banans QR-kod.</p>
+
+  <div class="card" id="scan">
+    <button id="live">Skanna med kameran</button>
+    <video id="video" playsinline muted></video>
+    <p class="muted" style="margin-top:14px">…eller klistra in länken till banan:</p>
+    <input id="paste" type="text" placeholder="https://run.controlfreak.se/#…" autocomplete="off">
+    <button id="usePaste" class="secondary">Använd länken</button>
+    <p id="msg" class="err"></p>
+  </div>
+
+  <div class="card" id="found">
+    <div class="name" id="name"></div>
+    <p id="info"></p>
+    <button id="send">Skicka till klockan</button>
+    <p class="muted" id="sendNote">Klockan visar banan när den tagit emot den.</p>
+    <div id="direct" style="display:none">
+      <p id="directText">Sidan är inte öppnad från klockan, så banan kan inte skickas härifrån. Öppna den från klockan: ControlFreak Run → Hämta ny bana. Eller kopiera länken och klistra in den i appens inställning i Garmin Connect.</p>
+      <button id="copy" class="secondary">Kopiera länken</button>
+    </div>
+  </div>
+
+  <details>
+    <summary class="muted">Testinformation</summary>
+    <pre id="diag"></pre>
+  </details>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script type="module">
+import { decodeRunCourse } from "./formats/run/course.js";
+
+const $ = (id) => document.getElementById(id);
+const log = [];
+function diag(s) { log.push(s); $("diag").textContent = log.join("\n"); }
+diag("Sidan v4, " + new Date().toISOString());
+diag("User agent: " + navigator.userAgent);
+diag("Adress: " + location.pathname + location.search);
+diag("getUserMedia: " + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+diag("BarcodeDetector: " + ("BarcodeDetector" in window));
+diag("jsQR: " + (typeof jsQR === "function"));
+
+let payload = null;
+// Klockan öppnar watch.html (samma sida). Bara då kan banan skickas tillbaka via connectiq://oauth.
+// Parametern from=watch räcker inte: Garmin Connect skickar inte alltid med den.
+const fromWatch = /\/watch(\.html)?$/.test(location.pathname) || new URLSearchParams(location.search).get("from") === "watch";
+diag("Från klockan: " + fromWatch);
+if (!fromWatch) {
+  $("send").style.display = "none";
+  $("sendNote").style.display = "none";
+  $("direct").style.display = "block";
+}
+$("copy").onclick = async () => {
+  if (!payload) return;
+  const link = "https://run.controlfreak.se/#" + payload;
+  try { await navigator.clipboard.writeText(link); $("copy").textContent = $("copy").dataset.done || "Kopierad"; }
+  catch (e) { prompt("", link); }
+};
+
+// Banans kod ur en länk (run.controlfreak.se/#<kod>) eller bara koden.
+function payloadFrom(text) {
+  const t = (text || "").trim();
+  const i = t.indexOf("#");
+  return i >= 0 ? t.slice(i + 1) : t;
+}
+
+function accept(text, how) {
+  const p = payloadFrom(text);
+  try {
+    const course = decodeRunCourse(p);
+    payload = p;
+    $("name").textContent = course.name || "Bana";
+    const n = course.controls.length;
+    $("info").textContent = n + " kontroller" + (course.score ? " (poängbana – stöds inte än på klockan)" : "");
+    $("found").style.display = "block";
+    $("msg").textContent = "";
+    diag("Bana läst via " + how + ": " + course.name + ", " + n + " kontroller");
+    stopLive();
+    $("found").scrollIntoView({ behavior: "smooth" });
+  } catch (e) {
+    $("msg").textContent = "Det där var ingen bana från ControlFreak Run.";
+    diag("Kunde inte läsa (" + how + "): " + e);
+  }
+}
+
+// Kameran direkt i sidan.
+let stream = null, timer = null;
+const canvas = document.createElement("canvas");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
+function stopLive() {
+  if (timer) { clearInterval(timer); timer = null; }
+  if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+  $("video").style.display = "none";
+}
+$("live").onclick = async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    const v = $("video"); v.srcObject = stream; v.style.display = "block"; await v.play();
+    diag("Kameran startade");
+    timer = setInterval(() => {
+      if (!v.videoWidth) return;
+      canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+      ctx.drawImage(v, 0, 0);
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(img.data, img.width, img.height);
+      if (code && code.data) accept(code.data, "kamera");
+    }, 250);
+  } catch (e) {
+    $("msg").textContent = "Kameran gick inte att starta här. Klistra in länken i stället.";
+    diag("Kamerafel: " + e);
+  }
+};
+
+$("usePaste").onclick = () => accept($("paste").value, "inklistrad länk");
+
+// Tillbaka till klockan: Garmin Connect fångar connectiq://oauth och skickar parametrarna till appen.
+$("send").onclick = () => {
+  if (!payload) return;
+  diag("Skickar till klockan");
+  location.href = "connectiq://oauth?course=" + encodeURIComponent(payload);
+};
+
+// Engelska om telefonen inte är på svenska.
+if (!/^(sv|nb|no|nn|da)/i.test(navigator.language || "")) {
+  document.documentElement.lang = "en";
+  $("intro").textContent = "Get a course for your watch: scan the course's QR code.";
+  $("live").textContent = "Scan with camera";
+  document.querySelector("#scan .muted").textContent = "…or paste the course link:";
+  $("usePaste").textContent = "Use link";
+  $("send").textContent = "Send to watch";
+  $("directText").textContent = "This page was not opened from the watch, so the course cannot be sent from here. Open it from the watch: ControlFreak Run → Get new course. Or copy the link and paste it into the app setting in Garmin Connect.";
+  $("copy").textContent = "Copy link";
+  $("copy").dataset.done = "Copied";
+  $("sendNote").textContent = "The watch shows the course when it has received it.";
+}
+</script>
+</body>
+</html>
