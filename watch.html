@@ -59,7 +59,7 @@ import { decodeRunCourse } from "./formats/run/course.js";
 const $ = (id) => document.getElementById(id);
 const log = [];
 function diag(s) { log.push(s); $("diag").textContent = log.join("\n"); }
-diag("Sidan v5, " + new Date().toISOString());
+diag("Sidan v6, " + new Date().toISOString());
 diag("User agent: " + navigator.userAgent);
 diag("Adress: " + location.pathname + location.search);
 diag("getUserMedia: " + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
@@ -67,6 +67,9 @@ diag("BarcodeDetector: " + ("BarcodeDetector" in window));
 diag("jsQR: " + (typeof jsQR === "function"));
 
 let payload = null;
+// Webbvyn i Garmin Connect fyller i förra gångens länk; börja alltid med ett tomt fält.
+$("paste").value = "";
+addEventListener("pageshow", () => { $("paste").value = ""; });
 // Klockan öppnar watch.html (samma sida). Bara då kan banan skickas tillbaka via connectiq://oauth.
 // Parametern from=watch räcker inte: Garmin Connect skickar inte alltid med den.
 const fromWatch = /\/watch(\.html)?$/.test(location.pathname) || new URLSearchParams(location.search).get("from") === "watch";
