@@ -103,6 +103,9 @@ function accept(text, how) {
     diag("Bana läst via " + how + ": " + course.name + ", " + n + " kontroller");
     stopLive();
     $("found").scrollIntoView({ behavior: "smooth" });
+    // Från klockan: skicka av sig själv efter en kort stund, så att löparen hinner se att det är
+    // rätt bana. Knappen finns kvar om det inte gick.
+    if (fromWatch) setTimeout(sendToWatch, 1200);
   } catch (e) {
     $("msg").textContent = "Det där var ingen bana från ControlFreak Run.";
     diag("Kunde inte läsa (" + how + "): " + e);
@@ -140,11 +143,12 @@ $("live").onclick = async () => {
 $("usePaste").onclick = () => accept($("paste").value, "inklistrad länk");
 
 // Tillbaka till klockan: Garmin Connect fångar connectiq://oauth och skickar parametrarna till appen.
-$("send").onclick = () => {
+function sendToWatch() {
   if (!payload) return;
   diag("Skickar till klockan");
   location.href = "connectiq://oauth?course=" + encodeURIComponent(payload);
-};
+}
+$("send").onclick = sendToWatch;
 
 // Engelska om telefonen inte är på svenska.
 if (!/^(sv|nb|no|nn|da)/i.test(navigator.language || "")) {
