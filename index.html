@@ -40,7 +40,11 @@
     <div class="name" id="name"></div>
     <p id="info"></p>
     <button id="send">Skicka till klockan</button>
-    <p class="muted">Klockan visar banan när den tagit emot den.</p>
+    <p class="muted" id="sendNote">Klockan visar banan när den tagit emot den.</p>
+    <div id="direct" style="display:none">
+      <p id="directText">Sidan är inte öppnad från klockan, så banan kan inte skickas härifrån. Öppna den från klockan: ControlFreak Run → Hämta ny bana. Eller kopiera länken och klistra in den i appens inställning i Garmin Connect.</p>
+      <button id="copy" class="secondary">Kopiera länken</button>
+    </div>
   </div>
 
   <details>
@@ -55,7 +59,7 @@ import { decodeRunCourse } from "./formats/run/course.js";
 const $ = (id) => document.getElementById(id);
 const log = [];
 function diag(s) { log.push(s); $("diag").textContent = log.join("\n"); }
-diag("Sidan v2, " + new Date().toISOString());
+diag("Sidan v3, " + new Date().toISOString());
 diag("User agent: " + navigator.userAgent);
 diag("Parametrar: " + location.search);
 diag("getUserMedia: " + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
@@ -63,6 +67,20 @@ diag("BarcodeDetector: " + ("BarcodeDetector" in window));
 diag("jsQR: " + (typeof jsQR === "function"));
 
 let payload = null;
+// Klockan öppnar sidan med ?from=watch. Bara då kan banan skickas tillbaka via connectiq://oauth.
+const fromWatch = new URLSearchParams(location.search).get("from") === "watch";
+diag("Från klockan: " + fromWatch);
+if (!fromWatch) {
+  $("send").style.display = "none";
+  $("sendNote").style.display = "none";
+  $("direct").style.display = "block";
+}
+$("copy").onclick = async () => {
+  if (!payload) return;
+  const link = "https://run.controlfreak.se/#" + payload;
+  try { await navigator.clipboard.writeText(link); $("copy").textContent = $("copy").dataset.done || "Kopierad"; }
+  catch (e) { prompt("", link); }
+};
 
 // Banans kod ur en länk (run.controlfreak.se/#<kod>) eller bara koden.
 function payloadFrom(text) {
@@ -135,7 +153,10 @@ if (!/^(sv|nb|no|nn|da)/i.test(navigator.language || "")) {
   document.querySelector("#scan .muted").textContent = "…or paste the course link:";
   $("usePaste").textContent = "Use link";
   $("send").textContent = "Send to watch";
-  document.querySelector("#found .muted").textContent = "The watch shows the course when it has received it.";
+  $("directText").textContent = "This page was not opened from the watch, so the course cannot be sent from here. Open it from the watch: ControlFreak Run → Get new course. Or copy the link and paste it into the app setting in Garmin Connect.";
+  $("copy").textContent = "Copy link";
+  $("copy").dataset.done = "Copied";
+  $("sendNote").textContent = "The watch shows the course when it has received it.";
 }
 </script>
 </body>
