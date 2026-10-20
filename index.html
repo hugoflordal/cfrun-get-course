@@ -19,6 +19,7 @@
   video { width:100%; border-radius:10px; background:#000; display:none; margin-top:8px; }
   #found { display:none; } #found .name { font-size:22px; font-weight:700; }
   .err { color:#b3261e; } .muted { color:var(--muted); font-size:14px; }
+  .row { display:flex; gap:8px; } .row button { margin:8px 0; }
   details { margin-top:18px; } pre { white-space:pre-wrap; font-size:12px; background:#fff; padding:10px; border-radius:8px; }
 </style>
 </head>
@@ -39,12 +40,13 @@
   <div class="card" id="found">
     <div class="name" id="name"></div>
     <p id="info"></p>
-    <button id="send">Skicka till klockan</button>
-    <p class="muted" id="sendNote">Klockan visar banan när den tagit emot den.</p>
-    <div id="direct" style="display:none">
-      <p id="directText">Sidan är inte öppnad från klockan, så banan kan inte skickas härifrån. Öppna den från klockan: ControlFreak Run → Hämta ny bana. Eller kopiera länken och klistra in den i appens inställning i Garmin Connect.</p>
+    <div class="row">
+      <button id="send">Skicka till klockan</button>
       <button id="copy" class="secondary">Kopiera länken</button>
     </div>
+    <p class="muted" id="copied" style="display:none">Länken är kopierad.</p>
+    <p class="muted" id="sendNote">Klockan visar banan när den tagit emot den.</p>
+    <p id="directText" style="display:none">Sidan är inte öppnad från klockan, så banan kan inte skickas härifrån. Öppna den från klockan: ControlFreak Run → Hämta ny bana. Eller kopiera länken och klistra in den i appens inställning i Garmin Connect.</p>
   </div>
 
   <details>
@@ -59,7 +61,7 @@ import { decodeRunCourse } from "./formats/run/course.js";
 const $ = (id) => document.getElementById(id);
 const log = [];
 function diag(s) { log.push(s); $("diag").textContent = log.join("\n"); }
-diag("Sidan v6, " + new Date().toISOString());
+diag("Sidan v7, " + new Date().toISOString());
 diag("User agent: " + navigator.userAgent);
 diag("Adress: " + location.pathname + location.search);
 diag("getUserMedia: " + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
@@ -77,14 +79,25 @@ diag("Från klockan: " + fromWatch);
 if (!fromWatch) {
   $("send").style.display = "none";
   $("sendNote").style.display = "none";
-  $("direct").style.display = "block";
+  $("directText").style.display = "block";
 }
-$("copy").onclick = async () => {
-  if (!payload) return;
+// Länken till banan i urklippet. `fromTap`: efter ett knapptryck (då tillåts kopiering
+// alltid); annars direkt efter skanningen, vilket telefonen kan neka utan att något syns.
+async function copyLink(fromTap) {
+  if (!payload) return false;
   const link = "https://run.controlfreak.se/#" + payload;
-  try { await navigator.clipboard.writeText(link); $("copy").textContent = $("copy").dataset.done || "Kopierad"; }
-  catch (e) { prompt("", link); }
-};
+  try {
+    await navigator.clipboard.writeText(link);
+    $("copied").style.display = "block";
+    diag("Länken kopierad" + (fromTap ? "" : " automatiskt"));
+    return true;
+  } catch (e) {
+    diag("Kopiering nekad: " + e);
+    if (fromTap) prompt("", link);
+    return false;
+  }
+}
+$("copy").onclick = () => copyLink(true);
 
 // Banans kod ur en länk (run.controlfreak.se/#<kod>) eller bara koden.
 function payloadFrom(text) {
@@ -106,8 +119,10 @@ function accept(text, how) {
     diag("Bana läst via " + how + ": " + course.name + ", " + n + " kontroller");
     stopLive();
     $("found").scrollIntoView({ behavior: "smooth" });
-    // Från klockan: skicka av sig själv efter en kort stund, så att löparen hinner se att det är
-    // rätt bana. Knappen finns kvar om det inte gick.
+    // Kopiera länken direkt (för inställningen i Garmin Connect), och från klockan skicka banan
+    // av sig själv efter en kort stund, så att löparen hinner se att det är rätt bana.
+    // Knapparna finns kvar om något inte gick.
+    copyLink(false);
     if (fromWatch) setTimeout(sendToWatch, 1200);
   } catch (e) {
     $("msg").textContent = "Det där var ingen bana från ControlFreak Run.";
@@ -168,7 +183,7 @@ if (!/^(sv|nb|no|nn|da)/i.test(navigator.language || "")) {
   $("send").textContent = "Send to watch";
   $("directText").textContent = "This page was not opened from the watch, so the course cannot be sent from here. Open it from the watch: ControlFreak Run → Get new course. Or copy the link and paste it into the app setting in Garmin Connect.";
   $("copy").textContent = "Copy link";
-  $("copy").dataset.done = "Copied";
+  $("copied").textContent = "The link is copied.";
   $("sendNote").textContent = "The watch shows the course when it has received it.";
 }
 </script>
