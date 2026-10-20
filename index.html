@@ -30,8 +30,6 @@
   <div class="card" id="scan">
     <button id="live">Skanna med kameran</button>
     <video id="video" playsinline muted></video>
-    <label class="btn secondary" for="photo">Fota QR-koden</label>
-    <input id="photo" type="file" accept="image/*" capture="environment" hidden>
     <p class="muted" style="margin-top:14px">…eller klistra in länken till banan:</p>
     <input id="paste" type="text" placeholder="https://run.controlfreak.se/#…" autocomplete="off">
     <button id="usePaste" class="secondary">Använd länken</button>
@@ -57,7 +55,7 @@ import { decodeRunCourse } from "./formats/run/course.js";
 const $ = (id) => document.getElementById(id);
 const log = [];
 function diag(s) { log.push(s); $("diag").textContent = log.join("\n"); }
-diag("Sidan v1, " + new Date().toISOString());
+diag("Sidan v2, " + new Date().toISOString());
 diag("User agent: " + navigator.userAgent);
 diag("Parametrar: " + location.search);
 diag("getUserMedia: " + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
@@ -115,27 +113,9 @@ $("live").onclick = async () => {
       if (code && code.data) accept(code.data, "kamera");
     }, 250);
   } catch (e) {
-    $("msg").textContent = "Kameran gick inte att starta här. Prova att fota QR-koden i stället.";
+    $("msg").textContent = "Kameran gick inte att starta här. Klistra in länken i stället.";
     diag("Kamerafel: " + e);
   }
-};
-
-// Ett foto av QR-koden.
-$("photo").onchange = async (ev) => {
-  const f = ev.target.files && ev.target.files[0];
-  if (!f) return;
-  diag("Foto: " + f.type + ", " + f.size + " byte");
-  const img = new Image();
-  img.onload = () => {
-    const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
-    canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(data.data, data.width, data.height);
-    if (code && code.data) accept(code.data, "foto");
-    else { $("msg").textContent = "Hittade ingen QR-kod i bilden. Prova igen, närmare."; diag("Ingen QR i fotot"); }
-  };
-  img.src = URL.createObjectURL(f);
 };
 
 $("usePaste").onclick = () => accept($("paste").value, "inklistrad länk");
@@ -152,7 +132,6 @@ if (!/^(sv|nb|no|nn|da)/i.test(navigator.language || "")) {
   document.documentElement.lang = "en";
   $("intro").textContent = "Get a course for your watch: scan the course's QR code.";
   $("live").textContent = "Scan with camera";
-  document.querySelector('label[for=photo]').textContent = "Take a photo of the QR code";
   document.querySelector("#scan .muted").textContent = "…or paste the course link:";
   $("usePaste").textContent = "Use link";
   $("send").textContent = "Send to watch";
