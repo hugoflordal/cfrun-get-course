@@ -59,7 +59,7 @@ import { decodeRunCourse } from "./formats/run/course.js";
 const $ = (id) => document.getElementById(id);
 const log = [];
 function diag(s) { log.push(s); $("diag").textContent = log.join("\n"); }
-diag("Sidan v4, " + new Date().toISOString());
+diag("Sidan v5, " + new Date().toISOString());
 diag("User agent: " + navigator.userAgent);
 diag("Adress: " + location.pathname + location.search);
 diag("getUserMedia: " + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
@@ -121,7 +121,7 @@ function stopLive() {
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   $("video").style.display = "none";
 }
-$("live").onclick = async () => {
+async function startLive() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     const v = $("video"); v.srcObject = stream; v.style.display = "block"; await v.play();
@@ -138,7 +138,12 @@ $("live").onclick = async () => {
     $("msg").textContent = "Kameran gick inte att starta här. Klistra in länken i stället.";
     diag("Kamerafel: " + e);
   }
-};
+}
+$("live").onclick = startLive;
+
+// Från klockan: starta kameran direkt, så att löparen bara behöver rikta den mot QR-koden.
+// Går det inte (inget tillstånd, eller webbvyn tillåter det inte) finns knappen kvar.
+if (fromWatch) startLive();
 
 $("usePaste").onclick = () => accept($("paste").value, "inklistrad länk");
 
